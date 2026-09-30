@@ -1,0 +1,13 @@
+model: Qwen/Qwen2.5-0.5B-Instruct
+device: auto
+dtype: auto
+mode: continuous
+scheduler: fcfs
+max_waiting: 64
+max_active: 8
+max_context: 2048
+max_output: 512
+max_batch_tokens: 16384
+max_kv_bytes: 1073741824
+static_batch_wait_ms: 5
+history_size: 2048

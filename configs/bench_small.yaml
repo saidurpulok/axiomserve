@@ -1,0 +1,21 @@
+# Initial GPU systems sanity check, not a statistical performance study.
+runtime:
+  model: Qwen/Qwen2.5-0.5B-Instruct
+  device: cuda
+  local_files_only: true
+  max_active: 8
+  max_context: 512
+  max_output: 64
+  max_batch_tokens: 4096
+  max_kv_bytes: 1073741824
+  scheduler: fcfs
+modes: [sequential, static, continuous]
+concurrencies: [1, 2, 4, 8]
+requests: 16
+arrival: burst
+burst_size: 8
+burst_interval: 0.1
+prompt_tokens: [8, 32]
+output_tokens: [8, 24]
+seed: 42
+warmup_requests: 2

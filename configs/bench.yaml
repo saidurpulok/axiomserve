@@ -1,0 +1,19 @@
+runtime:
+  model: Qwen/Qwen2.5-0.5B-Instruct
+  device: auto
+  max_active: 8
+  max_context: 2048
+  max_output: 512
+  max_batch_tokens: 16384
+  scheduler: fcfs
+modes: [sequential, static, continuous]
+concurrencies: [1, 2, 4, 8]
+requests: 32
+arrival: burst
+burst_size: 8
+burst_interval: 0.1
+rate: 10
+prompt_tokens: [16, 64]
+output_tokens: [16, 64]
+seed: 42
+warmup_requests: 2
