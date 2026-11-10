@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AxiomServe</title>
+<meta name="description" content="AxiomServe: an LLM serving runtime built from scratch to measure how scheduling, batching and the KV cache trade latency against throughput on a single 8 GB laptop GPU.">
+<meta name="author" content="Saidur Rahman Pulok">
+<meta property="og:title" content="AxiomServe">
+<meta property="og:description" content="An LLM serving runtime built from scratch to measure how scheduling, batching and the KV cache trade latency against throughput on one 8 GB laptop GPU.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="plots/tokens_per_second.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-soft: #f6f7f9;
+    --ink: #1c1f24;
+    --ink-soft: #4a5260;
+    --ink-faint: #7a8291;
+    --rule: #e3e6eb;
+    --accent: #1f5fae;
+    --accent-soft: #e8f0fa;
+    --good: #1d7a4a;
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --serif: "Source Serif 4", Georgia, serif;
+    --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16.5px/1.65 var(--sans);
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 20px; }
+
+  /* Header */
+  header { padding: 64px 0 28px; text-align: center; }
+  h1 {
+    font: 700 clamp(2.4rem, 6vw, 3.4rem)/1.1 var(--serif);
+    letter-spacing: -0.01em;
+    margin: 0 0 14px;
+  }
+  .subtitle {
+    font: 400 clamp(1.1rem, 2.6vw, 1.35rem)/1.45 var(--serif);
+    color: var(--ink-soft);
+    max-width: 720px;
+    margin: 0 auto 22px;
+  }
+  .authors { font-size: 1.05rem; margin: 0 0 4px; }
+  .affil { color: var(--ink-faint); font-size: 0.92rem; margin: 0 0 26px; }
+  .links { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 18px; border-radius: 999px;
+    background: var(--ink); color: #fff; font-weight: 500; font-size: 0.95rem;
+  }
+  .btn:hover { background: #363b44; text-decoration: none; }
+  .btn svg { width: 17px; height: 17px; fill: currentColor; }
+
+  /* Sections */
+  section { padding: 34px 0; border-top: 1px solid var(--rule); }
+  h2 {
+    font: 600 1.7rem/1.2 var(--serif);
+    margin: 0 0 18px;
+    text-align: center;
+  }
+  h3 { font: 600 1.15rem/1.3 var(--serif); margin: 26px 0 8px; }
+  p { margin: 0 0 14px; }
+  .lead { text-align: justify; hyphens: auto; }
+
+  .tldr {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
+    margin: 6px 0 4px;
+  }
+  .stat {
+    background: var(--bg-soft); border: 1px solid var(--rule);
+    border-radius: 10px; padding: 16px 16px 14px; text-align: center;
+  }
+  .stat .num { font: 700 1.9rem/1.1 var(--serif); color: var(--accent); }
+  .stat .lbl { font-size: 0.88rem; color: var(--ink-soft); margin-top: 6px; line-height: 1.4; }
+
+  figure { margin: 22px 0; }
+  figure img { width: 100%; height: auto; display: block; border-radius: 6px; border: 1px solid var(--rule); background: #fff; }
+  figcaption { font-size: 0.9rem; color: var(--ink-soft); margin-top: 10px; line-height: 1.5; }
+  figcaption b { color: var(--ink); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .grid2 figure { margin: 0; }
+
+  /* Diagram */
+  .diagram { overflow-x: auto; background: var(--bg-soft); border: 1px solid var(--rule); border-radius: 10px; padding: 18px 10px; }
+  .diagram svg { min-width: 640px; width: 100%; height: auto; display: block; }
+  .diagram text { font-family: var(--sans); }
+
+  .states {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+    gap: 8px; margin: 18px 0 6px; font: 500 0.82rem var(--mono);
+  }
+  .states span.s { padding: 4px 10px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); }
+  .states span.a { color: var(--ink-faint); }
+
+  /* Tables */
+  .table-wrap { overflow-x: auto; margin: 10px 0 6px; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.93rem; }
+  th, td { padding: 9px 12px; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; }
+  thead th { border-bottom: 2px solid var(--ink); font-weight: 600; white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: 2px solid var(--ink); }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.best { font-weight: 700; color: var(--good); }
+  .tcap { font-size: 0.88rem; color: var(--ink-soft); margin-top: 8px; }
+
+  ul.findings { padding-left: 1.2em; margin: 14px 0 0; }
+  ul.findings li { margin-bottom: 9px; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+  .two-col ul { padding-left: 1.15em; margin: 0; }
+  .two-col li { margin-bottom: 7px; font-size: 0.95rem; }
+
+  pre {
+    background: var(--bg-soft); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 14px 16px; overflow-x: auto; font: 0.84rem/1.6 var(--mono); margin: 10px 0 16px;
+  }
+  code { font-family: var(--mono); font-size: 0.88em; }
+  p code, li code, td code { background: var(--bg-soft); padding: 1px 5px; border-radius: 4px; }
+
+  .note {
+    border-left: 3px solid var(--accent); background: var(--accent-soft);
+    padding: 12px 16px; border-radius: 0 8px 8px 0; font-size: 0.93rem; margin: 18px 0 0;
+  }
+
+  footer { border-top: 1px solid var(--rule); padding: 28px 0 48px; text-align: center; color: var(--ink-faint); font-size: 0.86rem; }
+
+  @media (max-width: 680px) {
+    header { padding-top: 40px; }
+    .tldr { grid-template-columns: 1fr; }
+    .grid2, .two-col { grid-template-columns: 1fr; }
+    .lead { text-align: left; }
+    .wrap { padding: 0 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="wrap">
+  <h1>AxiomServe</h1>
+  <p class="subtitle">An LLM serving runtime built from the ground up to measure how scheduling, batching and the KV cache trade latency against throughput on a single 8&nbsp;GB laptop GPU</p>
+  <p class="authors"><a href="https://github.com/saidurpulok">Saidur Rahman Pulok</a></p>
+  <p class="affil">Independent project &middot; v0.1 &middot; 2026</p>
+  <nav class="links">
+    <a class="btn" href="https://github.com/saidurpulok/axiomserve">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      Code
+    </a>
+    <a class="btn" href="https://github.com/saidurpulok/axiomserve/blob/main/RESULTS.md">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 14h13a.5.5 0 010 1h-13A1.5 1.5 0 010 13.5v-12a.5.5 0 011 0v12a.5.5 0 00.5.5zM4 11V7h2v4H4zm3.5 0V4h2v7h-2zM11 11V2h2v9h-2z"/></svg>
+      Results
+    </a>
+    <a class="btn" href="https://github.com/saidurpulok/axiomserve/blob/main/docs/ARCHITECTURE.md">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 1h12a1 1 0 011 1v12a1 1 0 01-1 1H2a1 1 0 01-1-1V2a1 1 0 011-1zm1 2v3h4V3H3zm6 0v3h4V3H9zM3 8v5h10V8H3z"/></svg>
+      Architecture
+    </a>
+    <a class="btn" href="https://github.com/saidurpulok/axiomserve/blob/main/docs/DESIGN.md">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 1h7l3 3v10a1 1 0 01-1 1H3a1 1 0 01-1-1V2a1 1 0 011-1zm1 5v1h8V6H4zm0 3v1h8V9H4zm0 3v1h5v-1H4z"/></svg>
+      Design notes
+    </a>
+  </nav>
+</header>
+
+<main>
+  <section class="wrap">
+    <div class="tldr">
+      <div class="stat"><div class="num">3.2&times;</div><div class="lbl">token throughput from batching<br>(33.7 &rarr; 108.5 tokens/s)</div></div>
+      <div class="stat"><div class="num">503 &rarr; 119 ms</div><div class="lbl">p95 time-to-first-token,<br>static &rarr; continuous batching</div></div>
+      <div class="stat"><div class="num">29&ndash;31%</div><div class="lbl">of batched runner time spent<br>preparing and splitting the KV cache</div></div>
+    </div>
+    <figure style="max-width:720px;margin-left:auto;margin-right:auto">
+      <img src="plots/tokens_per_second.png" alt="Token throughput by batching mode and client concurrency" width="1014" height="671">
+      <figcaption><b>Figure 1.</b> Token throughput against client concurrency for the three batching modes, Qwen2.5-0.5B-Instruct in float16 on an RTX 5070 Laptop GPU (8&nbsp;GB). Sequential serving stays flat near 33 tokens/s; both batching modes scale to 100&ndash;108 tokens/s at eight concurrent requests.</figcaption>
+    </figure>
+  </section>
+
+  <section class="wrap">
+    <h2>Abstract</h2>
+    <p class="lead">Production inference engines such as vLLM are fast because of a handful of ideas: batched prefill, KV caching, continuous batching and careful request scheduling. Inside a large codebase those ideas are hard to see in isolation. AxiomServe rebuilds each moving part in a small, readable runtime and measures what each one buys on hardware a single person owns. Hugging Face Transformers supplies only the Qwen2 model definition and weights; AxiomServe owns the generation loop, batched prefill and decode, KV-cache handling, admission and scheduling, streaming and metrics.</p>
+    <p class="lead">On a seeded workload of 16 requests per case, continuous batching cut p95 time-to-first-token from 503&nbsp;ms to 119&nbsp;ms at eight concurrent requests compared with static batching, while static batching kept slightly higher throughput. Neither mode wins outright: the result is a latency/throughput trade-off. Profiling the runner shows that moving dense per-request KV tensors costs close to a third of batched compute time, which makes a paged KV cache the clear next step.</p>
+  </section>
+
+  <section class="wrap">
+    <h2>System overview</h2>
+    <div class="diagram">
+      <svg viewBox="0 0 840 300" role="img" aria-label="AxiomServe architecture: client requests pass through the API, a bounded queue and an admission policy into the iteration engine, which drives one model execution thread for batched prefill and decode over per-request KV tensors, then samples tokens and streams them back.">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0L10 5L0 10z" fill="#7a8291"/>
+          </marker>
+          <style>
+            .bx { fill:#fff; stroke:#c9ced6; stroke-width:1.2; }
+            .bx.k { fill:#e8f0fa; stroke:#1f5fae; }
+            .t { font-size:13px; font-weight:600; fill:#1c1f24; text-anchor:middle; }
+            .st { font-size:11px; fill:#4a5260; text-anchor:middle; }
+            .ln { stroke:#7a8291; stroke-width:1.4; fill:none; marker-end:url(#ar); }
+            .grp { fill:none; stroke:#1f5fae; stroke-dasharray:5 4; stroke-width:1.1; }
+            .gl { font-size:11px; fill:#1f5fae; font-weight:600; letter-spacing:.04em; }
+          </style>
+        </defs>
+        <!-- Row 1: request path -->
+        <rect class="bx" x="10" y="20" width="110" height="56" rx="8"/>
+        <text class="t" x="65" y="45">Client</text><text class="st" x="65" y="62">HTTP / SSE</text>
+        <rect class="bx" x="160" y="20" width="140" height="56" rx="8"/>
+        <text class="t" x="230" y="45">FastAPI server</text><text class="st" x="230" y="62">completions, cancel</text>
+        <rect class="bx" x="340" y="20" width="140" height="56" rx="8"/>
+        <text class="t" x="410" y="45">Waiting queue</text><text class="st" x="410" y="62">bounded</text>
+        <rect class="bx" x="520" y="20" width="150" height="56" rx="8"/>
+        <text class="t" x="595" y="45">Admission policy</text><text class="st" x="595" y="62">FCFS / shortest-first</text>
+        <rect class="bx k" x="700" y="20" width="130" height="56" rx="8"/>
+        <text class="t" x="765" y="45">Iteration engine</text><text class="st" x="765" y="62">asyncio event loop</text>
+        <path class="ln" d="M120 48H156"/><path class="ln" d="M300 48H336"/><path class="ln" d="M480 48H516"/><path class="ln" d="M670 48H696"/>
+        <!-- Model thread group -->
+        <rect class="grp" x="330" y="112" width="500" height="120" rx="10"/>
+        <text class="gl" x="344" y="130">ONE MODEL EXECUTION THREAD</text>
+        <rect class="bx k" x="345" y="145" width="140" height="60" rx="8"/>
+        <text class="t" x="415" y="171">Batched prefill</text><text class="st" x="415" y="188">left-padded prompts</text>
+        <rect class="bx k" x="510" y="145" width="140" height="60" rx="8"/>
+        <text class="t" x="580" y="171">Batched decode</text><text class="st" x="580" y="188">one token per row</text>
+        <rect class="bx" x="675" y="145" width="140" height="60" rx="8"/>
+        <text class="t" x="745" y="171">KV cache</text><text class="st" x="745" y="188">dense, per request</text>
+        <path class="ln" d="M765 76V108"/>
+        <path class="ln" d="M485 175H506"/>
+        <path class="ln" d="M650 168H671"/><path class="ln" d="M675 184H654"/>
+        <!-- Sampling + stream -->
+        <rect class="bx" x="160" y="150" width="140" height="56" rx="8"/>
+        <text class="t" x="230" y="175">Sampling</text><text class="st" x="230" y="192">greedy, top-k, top-p</text>
+        <path class="ln" d="M345 178H304"/>
+        <rect class="bx" x="10" y="150" width="110" height="56" rx="8"/>
+        <text class="t" x="65" y="175">Token stream</text><text class="st" x="65" y="192">bounded events</text>
+        <path class="ln" d="M160 178H124"/>
+        <path class="ln" d="M65 150V80"/>
+        <!-- Metrics -->
+        <rect class="bx" x="520" y="250" width="150" height="40" rx="8"/>
+        <text class="t" x="595" y="275">Metrics + benchmarks</text>
+        <path class="ln" d="M580 232V246"/>
+      </svg>
+    </div>
+    <div class="states" aria-label="Request lifecycle">
+      <span class="s">WAITING</span><span class="a">&rarr;</span><span class="s">PREFILLING</span><span class="a">&rarr;</span><span class="s">RUNNING</span><span class="a">&rarr;</span><span class="s">FINISHED</span>
+    </div>
+    <p class="tcap" style="text-align:center">Requests can be cancelled or fail from any state before the last; cache and engine entries are released on finish.</p>
+
+    <h3>Three batching modes behind one engine</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Mode</th><th>Admission</th><th>Trade-off</th></tr></thead>
+        <tbody>
+          <tr><td><b>Sequential</b></td><td>One request at a time</td><td>Correctness baseline; everyone else waits</td></tr>
+          <tr><td><b>Static</b></td><td>Gathers a cohort over a short interval</td><td>Batched forwards, but finished requests hold their slot until the whole cohort is done</td></tr>
+          <tr><td><b>Continuous</b></td><td>Rechecks capacity between iterations</td><td>New requests prefill while older ones keep decoding; prefill briefly pauses decode</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>What the runtime implements</h3>
+    <div class="two-col">
+      <ul>
+        <li><b>Prefill and decode:</b> batched prompt prefill, then one-token decode that reuses the real KV tensors from earlier steps, with logical position IDs that preserve RoPE across rows of different length.</li>
+        <li><b>Admission:</b> FCFS or shortest-prompt-first, bounded queues, and reservations for context length, padded tokens and optionally estimated KV memory.</li>
+      </ul>
+      <ul>
+        <li><b>Sampling:</b> greedy, temperature, top-k and top-p with per-request seeds, EOS handling and output limits.</li>
+        <li><b>Serving and measurement:</b> HTTP completions with SSE streaming, cancellation and graceful shutdown; per-request timings, bounded metrics and seeded benchmark sweeps.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <h2>Results</h2>
+    <p>Qwen2.5-0.5B-Instruct in float16 on an NVIDIA RTX 5070 Laptop GPU (8&nbsp;GB, WSL2). Each case sent 16 requests in two bursts of eight, with prompts of 8&ndash;32 tokens and outputs of 8&ndash;24 tokens. All 192 requests across the 12 cases succeeded.</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Mode</th><th class="n">Tokens/s &uarr;</th><th class="n">TTFT p50 (ms) &darr;</th><th class="n">TTFT p95 (ms) &darr;</th><th class="n">Latency p95 (ms) &darr;</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Sequential</td><td class="n">33.7</td><td class="n">2823</td><td class="n">3478</td><td class="n">4052</td></tr>
+          <tr><td>Static</td><td class="n best">108.5</td><td class="n best">57</td><td class="n">503</td><td class="n">1581</td></tr>
+          <tr><td>Continuous</td><td class="n">100.5</td><td class="n">62</td><td class="n best">119</td><td class="n best">1416</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="tcap"><b>Table 1.</b> Serving metrics at eight concurrent requests. Best value per column in bold. The full sweep over concurrency 1, 2, 4 and 8 is in <a href="https://github.com/saidurpulok/axiomserve/blob/main/RESULTS.md">RESULTS.md</a>.</p>
+
+    <div class="grid2" style="margin-top:22px">
+      <figure>
+        <img src="plots/ttft_p50_seconds.png" alt="Median time-to-first-token by mode and concurrency" width="1004" height="671" loading="lazy">
+        <figcaption><b>Figure 2.</b> Median TTFT. Sequential serving grows linearly with queue depth; both batching modes stay under 0.2&nbsp;s.</figcaption>
+      </figure>
+      <figure>
+        <img src="plots/latency_p95_seconds.png" alt="p95 end-to-end latency by mode and concurrency" width="1004" height="671" loading="lazy">
+        <figcaption><b>Figure 3.</b> p95 end-to-end latency. Continuous batching has the lowest tail at every concurrency above one.</figcaption>
+      </figure>
+    </div>
+
+    <ul class="findings">
+      <li><b>Batching tripled throughput,</b> from 33.7 tokens/s with sequential serving to 100&ndash;108 tokens/s with either batching mode.</li>
+      <li><b>Continuous batching kept tail latency low.</b> Its p95 TTFT was 119&nbsp;ms against 503&nbsp;ms for static batching, because new requests join between decode steps instead of waiting for a cohort to finish.</li>
+      <li><b>Static batching had slightly higher throughput</b> in this run, so this is a latency/throughput trade-off rather than a universal win.</li>
+      <li><b>Moving the KV cache around is expensive.</b> At concurrency eight, preparing and splitting the cache took about 29&ndash;31% of batched runner time.</li>
+    </ul>
+
+    <figure style="max-width:560px;margin:26px auto 0">
+      <img src="plots/peak_gpu_mib.png" alt="Peak allocated GPU memory by mode and concurrency" width="1014" height="671" loading="lazy">
+      <figcaption><b>Figure 4.</b> Peak PyTorch-allocated GPU memory, including weights. With these short contexts it stays near 1&nbsp;GiB, so this run does not test memory pressure.</figcaption>
+    </figure>
+  </section>
+
+  <section class="wrap">
+    <h2>Correctness</h2>
+    <p>Speed numbers mean little if the batched path generates different tokens. The test suite builds a tiny randomly initialised Qwen2 model so CPU checks need no download, and compares padded batched decode against full-sequence forwards. Manual greedy decoding is checked token-for-token against Transformers' <code>generate()</code>, which is used only as a test oracle; the serving engine never calls it.</p>
+    <ul class="findings">
+      <li>25 tests pass, including pretrained CUDA greedy equivalence against a neutral <code>generate()</code> oracle.</li>
+      <li>A GPU smoke test confirms all three modes produce identical token sequences, and that continuous mode admits a fresh request while an older one is still running.</li>
+      <li>Strict mypy passes on 22 source files; Ruff lint and format checks pass. CPU checks run in CI on every push.</li>
+    </ul>
+  </section>
+
+  <section class="wrap">
+    <h2>Limitations and next steps</h2>
+    <div class="two-col">
+      <div>
+        <h3 style="margin-top:0">Limitations</h3>
+        <ul>
+          <li>Each request's KV cache is a dense tensor that is padded, packed and copied on every decode step; there is no paged cache.</li>
+          <li>Prefilling a new prompt blocks decode for active requests; no chunked prefill or preemption.</li>
+          <li>No custom kernels, CUDA graphs, quantization, prefix caching or speculative decoding.</li>
+          <li>One process on one GPU, behind a minimal completions API that is not fully OpenAI-compatible. Full-attention Qwen2 models only.</li>
+          <li>Shortest-prompt-first can starve long prompts.</li>
+        </ul>
+      </div>
+      <div>
+        <h3 style="margin-top:0">What comes next</h3>
+        <ul>
+          <li>A paged KV cache, to remove the per-step repacking.</li>
+          <li>Chunked prefill, so new prompts stop stalling decode.</li>
+          <li>Larger sweeps with longer contexts, repeated runs with confidence intervals and randomised case order.</li>
+          <li>Prefix caching for shared prompts.</li>
+        </ul>
+      </div>
+    </div>
+    <p class="note">This is one small run with short contexts and no confidence intervals: a systems sanity check, not a statistical performance study. Full caveats are in <a href="https://github.com/saidurpulok/axiomserve/blob/main/docs/LIMITATIONS.md">LIMITATIONS.md</a>.</p>
+  </section>
+
+  <section class="wrap">
+    <h2>Run it</h2>
+    <p>Requires Python 3.11+ and <a href="https://docs.astral.sh/uv/">uv</a>. A CUDA GPU is optional; pass <code>--device cpu</code> without one.</p>
+<pre><code>git clone https://github.com/saidurpulok/axiomserve && cd axiomserve
+uv sync --python 3.12 --group dev --extra bench
+uv run axiom serve --config configs/serve.yaml
+
+curl -N http://127.0.0.1:8000/v1/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt":"Explain a KV cache:","max_tokens":32,"temperature":0,"stream":true}'</code></pre>
+    <p>Reproduce the benchmark and plots:</p>
+<pre><code>uv run axiom bench --config configs/bench_small.yaml --output results/gpu-small.json
+uv run python scripts/plot_benchmarks.py results/gpu-small.json</code></pre>
+  </section>
+
+  <section class="wrap">
+    <h2>Citation</h2>
+<pre><code>@software{pulok2026axiomserve,
+  author = {Pulok, Saidur Rahman},
+  title  = {AxiomServe: A From-Scratch LLM Serving Runtime for Studying
+            Scheduling, Batching and KV-Cache Trade-offs},
+  year   = {2026},
+  url    = {https://github.com/saidurpulok/axiomserve}
+}</code></pre>
+  </section>
+</main>
+
+<footer class="wrap">
+  AxiomServe is released under the MIT License. &middot; <a href="https://github.com/saidurpulok/axiomserve">github.com/saidurpulok/axiomserve</a>
+</footer>
+
+</body>
+</html>
